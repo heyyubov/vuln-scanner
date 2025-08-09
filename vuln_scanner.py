@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 import argparse
 import socket
 import concurrent.futures
@@ -9,7 +8,6 @@ from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 import re
 import json
 import time
-import sys
 from pathlib import Path
 
 # --------- CONFIG ----------
@@ -27,7 +25,6 @@ SQL_ERROR_PATTERNS = [
 ]
 XSS_DETECTION_TOKEN = "<sCaNnErToken>"
 
-
 def parse_port_range(s):
     if not s:
         return COMMON_PORTS
@@ -40,7 +37,6 @@ def parse_port_range(s):
         else:
             ports.add(int(part))
     return sorted(ports)
-
 
 def scan_port(host, port, timeout=TCP_TIMEOUT):
     try:
@@ -60,12 +56,11 @@ def run_port_scan(host, ports, threads=50):
             results[p] = open_
     return results
 
-
 def fetch_url(url):
     try:
         r = requests.get(url, timeout=HTTP_TIMEOUT, allow_redirects=True)
         return r
-    except Exception as e:
+    except Exception:
         return None
 
 SECURITY_HEADERS = [
@@ -89,17 +84,16 @@ def inject_params_and_test(url, method="GET"):
     parsed = urlparse(url)
     qs = parse_qs(parsed.query, keep_blank_values=True)
     if not qs:
-        # create a test param
         base_query = {"test": ["1"]}
     else:
         base_query = qs
 
     findings = {"xss": [], "sqli": []}
     for param in base_query:
-        # build payloads
         xss_payload = XSS_DETECTION_TOKEN
         sqli_payloads = ["'", "\"", "' OR '1'='1", "\" OR \"1\"=\"1", " OR 1=1 -- "]
-        # test xss
+
+        # Test XSS
         new_q = base_query.copy()
         new_q[param] = [xss_payload]
         qenc = urlencode({k: v[0] for k,v in new_q.items()})
@@ -116,7 +110,7 @@ def inject_params_and_test(url, method="GET"):
         except Exception:
             pass
 
-        # test sqli
+        # Test SQLi
         for sp in sqli_payloads:
             new_q[param] = [sp]
             qenc = urlencode({k: v[0] for k,v in new_q.items()})
@@ -146,7 +140,6 @@ def extract_snippet(body, token, radius=40):
     end = min(len(body), i + len(token) + radius)
     return body[start:end].replace("\n"," ")
 
-
 def dir_brute(target_base, wordlist_path, threads=30):
     found = []
     parsed = urlparse(target_base)
@@ -171,12 +164,10 @@ def dir_brute(target_base, wordlist_path, threads=30):
                 found.append({"url": res[0], "status": res[1]})
     return found
 
-
 def run_all(target, ports, threads, wordlist=None):
     report = {"target": target, "timestamp": time.time(), "port_scan": {}, "http": {}, "vulns": {}, "dir_brute": []}
     parsed = urlparse(target)
     host = parsed.hostname or target
-
 
     try:
         ip = socket.gethostbyname(host)
@@ -184,7 +175,6 @@ def run_all(target, ports, threads, wordlist=None):
         ip = host
     report["resolved_ip"] = ip
     report["port_scan"] = run_port_scan(ip, ports, threads=threads)
-
 
     url_to_check = target
     if not parsed.scheme:
@@ -199,12 +189,10 @@ def run_all(target, ports, threads, wordlist=None):
     else:
         report["http"]["error"] = "no-response"
 
-    # dir brute (optional)
     if wordlist:
         report["dir_brute"] = dir_brute(url_to_check, wordlist, threads=max(10, threads//2))
 
     return report
-
 
 def main():
     ap = argparse.ArgumentParser(description="Simple vulnerability scanner for learning / portfolio")
@@ -219,7 +207,6 @@ def main():
     print(f"[+] Starting scan of {args.target}")
     rep = run_all(args.target, ports, args.threads, wordlist=args.wordlist)
 
-    # Summary print
     open_ports = [p for p,o in rep["port_scan"].items() if o]
     print(f"[+] Resolved IP: {rep.get('resolved_ip')}")
     print(f"[+] Open ports: {open_ports}")
@@ -236,7 +223,6 @@ def main():
     if args.wordlist:
         print(f"[+] Dir bruteforce found: {len(rep['dir_brute'])} entries")
 
-
     if args.json and args.json.lower() != "no":
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(rep, f, indent=2, ensure_ascii=False)
@@ -244,4 +230,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
